@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高機能 席替えツール</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f0f4f8;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        }
+        h1 { text-align: center; color: #2c3e50; }
+        h2 { font-size: 18px; border-bottom: 2px solid #3498db; padding-bottom: 5px; margin-top: 30px; }
+        
+        .row-group { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
+        .input-box { flex: 1; min-width: 250px; }
+        label { font-weight: bold; display: block; margin-bottom: 5px; font-size: 14px; }
+        input[type="number"], textarea {
+            width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;
+        }
+        button {
+            background-color: #3498db; color: white; border: none; padding: 10px 20px;
+            font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.2s;
+        }
+        button:hover { background-color: #2980b9; }
+        .btn-large { display: block; width: 100%; padding: 15px; font-size: 20px; margin-top: 20px; background-color: #e74c3c; }
+        .btn-large:hover { background-color: #c0392b; }
+
+        /* グリッドと席のデザイン */
+        .grid-container {
+            display: grid; gap: 10px; margin-top: 15px; justify-content: center;
+        }
+        .seat {
+            background-color: #ecf0f1; border: 2px solid #bdc3c7; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            height: 60px; font-weight: bold; cursor: pointer; user-select: none;
+            transition: 0.2s; text-align: center; font-size: 14px; padding: 5px;
+        }
+        .seat.disabled {
+            background-color: transparent; border: 2px dashed #ccc; color: transparent; cursor: pointer;
+        }
+        /* 色付け用のクラス */
+        .seat.highlight { background-color: #ffeaa7; border-color: #f1c40f; color: #d35400; }
+        .front-desk { background-color: #7f8c8d; color: white; text-align: center; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
+        
+        #step2, #result-area { display: none; }
+        .hint { font-size: 13px; color: #7f8c8d; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>高機能 席替えツール</h1>
+
+    <h2>1. 席のレイアウト（形）を作る</h2>
+    <div class="row-group" style="align-items: flex-end;">
+        <div class="input-box">
+            <label>縦の数（行）</label><input type="number" id="rows" value="5" min="1">
+        </div>
+        <div class="input-box">
+            <label>横の数（列）</label><input type="number" id="cols" value="6" min="1">
+        </div>
+        <button onclick="generateEditor()">レイアウト作成</button>
+    </div>
+    
+    <div id="step2">
+        <p class="hint">👉 <strong>不要な席をクリック</strong>すると「通路（空白）」になります。コの字型なども作れます。</p>
+        <div class="front-desk">教卓 / 前方</div>
+        <div id="editor-grid" class="grid-container"></div>
+
+        <h2>2. メンバーの入力</h2>
+        <div class="input-box">
+            <label>名前（改行で1人ずつ入力）</label>
+            <textarea id="names" rows="6" placeholder="※何も入力しない場合は、自動で1からの数字が割り当てられます"></textarea>
+        </div>
+
+        <h2>3. 特別な条件（オプション）</h2>
+        <div class="row-group">
+            <div class="input-box">
+                <label>🎨 色をつける人（番号）</label>
+                <textarea id="color-names" rows="2" placeholder="名前や番号を改行またはカンマで入力"></textarea>
+                <p class="hint">入力された人に色が付きます。</p>
+            </div>
+            <div class="input-box">
+                <label>👀 前方に優先配置する人（番号）</label>
+                <textarea id="front-names" rows="2" placeholder="名前や番号を改行またはカンマで入力"></textarea>
+                <p class="hint">視力が悪い人などを前の席に集めます。</p>
+            </div>
+        </div>
+
+        <button class="btn-large" onclick="executeShuffle()">席替えスタート！</button>
+    </div>
+
+    <div id="result-area">
+        <h2>🎉 席替え結果</h2>
+        <p class="hint" style="color: #e74c3c; font-weight: bold;">
+            👉 席をマウスでドラッグ＆ドロップすると、自由に場所を入れ替えられます！
+        </p>
+        <div class="front-desk">教卓 / 前方</div>
+        <div id="result-grid" class="grid-container"></div>
+        <button onclick="location.reload()" style="margin-top: 20px; background-color: #95a5a6;">最初からやり直す</button>
+    </div>
+
+</div>
+
+<script>
+    let currentRows = 0;
+    let currentCols = 0;
+
+    // レイアウトエディタの生成
+    function generateEditor() {
+        currentRows = parseInt(document.getElementById('rows').value);
+        currentCols = parseInt(document.getElementById('cols').value);
+        const grid = document.getElementById('editor-grid');
+        
+        grid.style.gridTemplateColumns = `repeat(${currentCols}, 1fr)`;
+        grid.innerHTML = '';
+
+        for (let i = 0; i < currentRows * currentCols; i++) {
+            const seat = document.createElement('div');
+            seat.className = 'seat active-seat';
+            seat.textContent = '席';
+            // クリックで有効/無効（通路）を切り替え
+            seat.onclick = function() {
+                if (this.classList.contains('disabled')) {
+                    this.classList.remove('disabled');
+                    this.classList.add('active-seat');
+                    this.textContent = '席';
+                } else {
+                    this.classList.remove('active-seat');
+                    this.classList.add('disabled');
+                    this.textContent = '';
+                }
+            };
+            grid.appendChild(seat);
+        }
+        document.getElementById('step2').style.display = 'block';
+    }
+
+    // 席替えの実行
+    function executeShuffle() {
+        // 名前の取得と整形
+        const splitNames = (text) => text.split(/[\n,、]/).map(n => n.trim()).filter(n => n !== '');
+        
+        let allNames = splitNames(document.getElementById('names').value);
+        const colorNames = splitNames(document.getElementById('color-names').value);
+        const frontNames = splitNames(document.getElementById('front-names').value);
+
+        // 有効な席（通路ではない席）のリストを取得
+        const editorSeats = document.querySelectorAll('#editor-grid .seat');
+        const layoutPlan = Array.from(editorSeats).map(seat => !seat.classList.contains('disabled'));
+        const activeSeatCount = layoutPlan.filter(isActive => isActive).length;
+
+        // ★追加機能: 名前が空欄なら、1から有効席数までの数字を自動生成
+        if (allNames.length === 0) {
+            for (let i = 1; i <= activeSeatCount; i++) {
+                allNames.push(i.toString());
+            }
+        }
+
+        if (allNames.length > activeSeatCount) { alert(`席が足りません！(有効な席: ${activeSeatCount}, 人数: ${allNames.length})`); return; }
+
+        // 前方優先の人と通常の人を分ける
+        let frontList = [];
+        let normalList = [];
+        allNames.forEach(name => {
+            if (frontNames.includes(name)) frontList.push(name);
+            else normalList.push(name);
+        });
+
+        // シャッフル関数
+        const shuffleArray = (array) => {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        };
+
+        shuffleArray(frontList);
+        shuffleArray(normalList);
+
+        // 席の割り当て
+        let finalAssignments = [];
+        let assignIndex = 0;
+
+        for (let i = 0; i < layoutPlan.length; i++) {
+            if (!layoutPlan[i]) {
+                finalAssignments.push(null); // 通路
+            } else {
+                // 有効な席なら、まず前方優先リストから、次に通常リストから割り当て
+                if (assignIndex < frontList.length) {
+                    finalAssignments.push(frontList[assignIndex]);
+                } else if (assignIndex - frontList.length < normalList.length) {
+                    finalAssignments.push(normalList[assignIndex - frontList.length]);
+                } else {
+                    finalAssignments.push('空席');
+                }
+                assignIndex++;
+            }
+        }
+
+        // 結果の描画
+        const resultGrid = document.getElementById('result-grid');
+        resultGrid.style.gridTemplateColumns = `repeat(${currentCols}, 1fr)`;
+        resultGrid.innerHTML = '';
+
+        finalAssignments.forEach(name => {
+            const seat = document.createElement('div');
+            seat.className = 'seat';
+            
+            if (name === null) {
+                seat.classList.add('disabled');
+            } else {
+                seat.textContent = name;
+                if (colorNames.includes(name)) {
+                    seat.classList.add('highlight');
+                }
+            }
+            
+            makeDraggable(seat); // ドラッグ＆ドロップ機能を付与
+            resultGrid.appendChild(seat);
+        });
+
+        // スクロールして結果を表示
+        document.getElementById('result-area').style.display = 'block';
+        document.getElementById('result-area').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // ドラッグ＆ドロップ処理（席の入れ替え機能）
+    let dragSrcEl = null;
+    function makeDraggable(el) {
+        el.draggable = true;
+        el.addEventListener('dragstart', function(e) {
+            dragSrcEl = this;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.innerHTML);
+            this.style.opacity = '0.4';
+        });
+        el.addEventListener('dragend', function(e) {
+            this.style.opacity = '1';
+        });
+        el.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            return false;
+        });
+        el.addEventListener('drop', function(e) {
+            e.stopPropagation();
+            if (dragSrcEl !== this) {
+                // 見た目（HTML）とクラス（色付けや通路の状態）を丸ごと入れ替える
+                let tempHtml = dragSrcEl.innerHTML;
+                let tempClass = dragSrcEl.className;
+                
+                dragSrcEl.innerHTML = this.innerHTML;
+                dragSrcEl.className = this.className;
+                
+                this.innerHTML = tempHtml;
+                this.className = tempClass;
+            }
+            return false;
+        });
+    }
+</script>
+
+</body>
+</html>
