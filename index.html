@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高機能 席替えツール</title>
+    <title>高機能 席替えツール (2色対応)</title>
     <style>
         body {
             font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -50,8 +50,11 @@
         .seat.disabled {
             background-color: transparent; border: 2px dashed #ccc; color: transparent; cursor: pointer;
         }
-        /* 色付け用のクラス */
-        .seat.highlight { background-color: #ffeaa7; border-color: #f1c40f; color: #d35400; }
+        
+        /* 🎨 色付け用のクラス（2色） */
+        .seat.highlight-1 { background-color: #ffeaa7; border-color: #f1c40f; color: #d35400; } /* 色1: 黄色系 */
+        .seat.highlight-2 { background-color: #81ecec; border-color: #00cec9; color: #0984e3; } /* 色2: 水色系 */
+        
         .front-desk { background-color: #7f8c8d; color: white; text-align: center; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
         
         #step2, #result-area { display: none; }
@@ -88,14 +91,16 @@
         <h2>3. 特別な条件（オプション）</h2>
         <div class="row-group">
             <div class="input-box">
-                <label>🎨 色をつける人（番号）</label>
-                <textarea id="color-names" rows="2" placeholder="名前や番号を改行またはカンマで入力"></textarea>
-                <p class="hint">入力された人に色が付きます。</p>
+                <label>🎨 色1（黄色）をつける人</label>
+                <textarea id="color-names-1" rows="2" placeholder="改行またはカンマで入力"></textarea>
             </div>
             <div class="input-box">
-                <label>👀 前方に優先配置する人（番号）</label>
-                <textarea id="front-names" rows="2" placeholder="名前や番号を改行またはカンマで入力"></textarea>
-                <p class="hint">視力が悪い人などを前の席に集めます。</p>
+                <label>🎨 色2（水色）をつける人</label>
+                <textarea id="color-names-2" rows="2" placeholder="改行またはカンマで入力"></textarea>
+            </div>
+            <div class="input-box">
+                <label>👀 前方に優先配置する人</label>
+                <textarea id="front-names" rows="2" placeholder="改行またはカンマで入力"></textarea>
             </div>
         </div>
 
@@ -154,7 +159,8 @@
         const splitNames = (text) => text.split(/[\n,、]/).map(n => n.trim()).filter(n => n !== '');
         
         let allNames = splitNames(document.getElementById('names').value);
-        const colorNames = splitNames(document.getElementById('color-names').value);
+        const color1Names = splitNames(document.getElementById('color-names-1').value);
+        const color2Names = splitNames(document.getElementById('color-names-2').value);
         const frontNames = splitNames(document.getElementById('front-names').value);
 
         // 有効な席（通路ではない席）のリストを取得
@@ -162,7 +168,7 @@
         const layoutPlan = Array.from(editorSeats).map(seat => !seat.classList.contains('disabled'));
         const activeSeatCount = layoutPlan.filter(isActive => isActive).length;
 
-        // ★追加機能: 名前が空欄なら、1から有効席数までの数字を自動生成
+        // 名前が空欄なら、1から有効席数までの数字を自動生成
         if (allNames.length === 0) {
             for (let i = 1; i <= activeSeatCount; i++) {
                 allNames.push(i.toString());
@@ -223,8 +229,11 @@
                 seat.classList.add('disabled');
             } else {
                 seat.textContent = name;
-                if (colorNames.includes(name)) {
-                    seat.classList.add('highlight');
+                // 色付けの判定 (色1を優先、次に色2)
+                if (color1Names.includes(name)) {
+                    seat.classList.add('highlight-1');
+                } else if (color2Names.includes(name)) {
+                    seat.classList.add('highlight-2');
                 }
             }
             
